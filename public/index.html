@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Usuarios - Autenticación JWT</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-8">
+  <div class="max-w-md mx-auto">
+    <h1 class="text-3xl font-bold mb-6 text-yellow-400 text-center flex items-center justify-center gap-2">
+      ⚡ Sistema de Usuarios & Auth
+    </h1>
+
+    <!-- Selector de Pestañas (Login / Registro) -->
+    <div class="flex border-b border-gray-700 mb-6" id="authTabs">
+      <button id="tabLogin" onclick="switchTab('login')" class="flex-1 py-2 font-semibold text-yellow-400 border-b-2 border-yellow-400">
+        Iniciar Sesión
+      </button>
+      <button id="tabRegister" onclick="switchTab('register')" class="flex-1 py-2 font-semibold text-gray-400">
+        Registrarse
+      </button>
+    </div>
+
+    <!-- Formulario Iniciar Sesión -->
+    <div id="loginFormContainer" class="bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-center">Bienvenido de nuevo</h2>
+      <form id="loginForm" class="space-y-4">
+        <input type="email" id="loginEmail" placeholder="Correo electrónico" required 
+          class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-yellow-400">
+        <input type="password" id="loginPassword" placeholder="Contraseña" required 
+          class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-yellow-400">
+        <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 rounded transition">
+          Entrar
+        </button>
+      </form>
+    </div>
+
+    <!-- Formulario Registrarse -->
+    <div id="registerFormContainer" class="hidden bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-center">Crear Cuenta Nueva</h2>
+      <form id="registerForm" class="space-y-4">
+        <input type="text" id="regName" placeholder="Nombre completo" required 
+          class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-yellow-400">
+        <input type="email" id="regEmail" placeholder="Correo electrónico" required 
+          class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-yellow-400">
+        <input type="password" id="regPassword" placeholder="Contraseña segura" required 
+          class="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-yellow-400">
+        <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 rounded transition">
+          Registrarme
+        </button>
+      </form>
+    </div>
+
+    <!-- Estado de Sesión / Token -->
+    <div id="sessionBox" class="hidden bg-green-900/40 border border-green-500 p-4 rounded-lg mb-6 flex justify-between items-center">
+      <div>
+        <p class="text-xs text-green-400 font-bold uppercase">Sesión Activa</p>
+        <p id="sessionUser" class="text-sm font-semibold"></p>
+      </div>
+      <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-xs text-white px-3 py-1 rounded transition">
+        Cerrar Sesión
+      </button>
+    </div>
+
+    <!-- Lista de Usuarios en la BD -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-4">Usuarios en el Sistema</h2>
+      <ul id="userList" class="space-y-3"></ul>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api/v1/users';
+
+    function switchTab(tab) {
+      const loginContainer = document.getElementById('loginFormContainer');
+      const registerContainer = document.getElementById('registerFormContainer');
+      const tabLogin = document.getElementById('tabLogin');
+      const tabRegister = document.getElementById('tabRegister');
+
+      if (tab === 'login') {
+        loginContainer.classList.remove('hidden');
+        registerContainer.classList.add('hidden');
+        tabLogin.className = 'flex-1 py-2 font-semibold text-yellow-400 border-b-2 border-yellow-400';
+        tabRegister.className = 'flex-1 py-2 font-semibold text-gray-400';
+      } else {
+        loginContainer.classList.add('hidden');
+        registerContainer.classList.remove('hidden');
+        tabRegister.className = 'flex-1 py-2 font-semibold text-yellow-400 border-b-2 border-yellow-400';
+        tabLogin.className = 'flex-1 py-2 font-semibold text-gray-400';
+      }
+    }
+
+    async function fetchUsers() {
+      try {
+        const res = await fetch(API_URL);
+        const users = await res.json();
+        const list = document.getElementById('userList');
+        list.innerHTML = '';
+
+        if (!Array.isArray(users) || users.length === 0) {
+          list.innerHTML = '<li class="text-gray-400 text-center">No hay usuarios registrados.</li>';
+          return;
+        }
+
+        users.forEach(user => {
+          const li = document.createElement('li');
+          li.className = 'flex justify-between items-center bg-gray-700 p-3 rounded';
+          li.innerHTML = `
+            <div>
+              <p class="font-bold text-yellow-300">${user.name}</p>
+              <p class="text-xs text-gray-300">${user.email}</p>
+            </div>
+            <button onclick="deleteUser('${user.id}')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs transition">
+              Eliminar
+            </button>
+          `;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('Error al cargar lista:', err);
+      }
+    }
+
+    // Registro
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+
+      try {
+        const res = await fetch(`${API_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert('¡Registro exitoso! Ahora puedes iniciar sesión.');
+          document.getElementById('registerForm').reset();
+          switchTab('login');
+          fetchUsers();
+        } else {
+          alert(data.message || 'Error al registrar');
+        }
+      } catch (err) {
+        alert('Error al conectar con el servidor');
+      }
+    });
+
+    // Login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+
+      try {
+        const res = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('jwtToken', data.token);
+          localStorage.setItem('userEmail', data.user.email);
+          checkSession();
+          alert('¡Inicio de sesión exitoso!');
+        } else {
+          alert(data.message || 'Credenciales inválidas');
+        }
+      } catch (err) {
+        alert('Error al intentar iniciar sesión');
+      }
+    });
+
+    function checkSession() {
+      const email = localStorage.getItem('userEmail');
+      const sessionBox = document.getElementById('sessionBox');
+      const sessionUser = document.getElementById('sessionUser');
+
+      if (email) {
+        sessionUser.innerText = email;
+        sessionBox.classList.remove('hidden');
+      } else {
+        sessionBox.classList.add('hidden');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('jwtToken');
+      localStorage.removeItem('userEmail');
+      checkSession();
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
+      try {
+        await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        fetchUsers();
+      } catch (err) {
+        alert('Error al eliminar');
+      }
+    }
+
+    checkSession();
+    fetchUsers();
+  </script>
+</body>
+</html>
